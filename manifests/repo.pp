@@ -48,26 +48,69 @@ class powerdns::repo inherits powerdns {
         source => 'https://repo.powerdns.com/FD380FBB-pub.asc',
       }
 
+      # Determine if this system supports DEB822 format
+      $supports_deb822 = (
+        ($facts['os']['name'] == 'Debian' and Integer($facts['os']['release']['major']) >= 12) or
+        ($facts['os']['name'] == 'Ubuntu' and versioncmp($facts['os']['release']['full'], '22.04') >= 0)
+      )
+
       $auth_release = "${facts['os']['distro']['codename']}-auth-${authoritative_short_version}"
-      apt::source { 'powerdns':
-        ensure       => present,
-        location     => "http://repo.powerdns.com/${os}",
-        repos        => 'main',
-        release      => $auth_release,
-        architecture => 'amd64',
-        keyring      => '/etc/apt/keyrings/powerdns.asc',
-        require      => Apt::Keyring['powerdns.asc'],
+      if $supports_deb822 {
+        apt::source { 'powerdns':
+          ensure        => present,
+          location      => "http://repo.powerdns.com/${os}",
+          repos         => 'main',
+          release       => $auth_release,
+          architecture  => 'amd64',
+          keyring       => '/etc/apt/keyrings/powerdns.asc',
+          source_format => 'sources',
+          require       => Apt::Keyring['powerdns.asc'],
+        }
+      } else {
+        apt::source { 'powerdns':
+          ensure       => present,
+          location     => "http://repo.powerdns.com/${os}",
+          repos        => 'main',
+          release      => $auth_release,
+          architecture => 'amd64',
+          keyring      => '/etc/apt/keyrings/powerdns.asc',
+          require      => Apt::Keyring['powerdns.asc'],
+        }
       }
 
       $rec_release = "${facts['os']['distro']['codename']}-rec-${recursor_short_version}"
-      apt::source { 'powerdns-recursor':
-        ensure       => present,
-        location     => "http://repo.powerdns.com/${os}",
-        repos        => 'main',
-        release      => $rec_release,
-        architecture => 'amd64',
-        keyring      => '/etc/apt/keyrings/powerdns.asc',
-        require      => Apt::Source['powerdns'],
+      if $supports_deb822 {
+        apt::source { 'powerdns-recursor':
+          ensure        => present,
+          location      => "http://repo.powerdns.com/${os}",
+          repos         => 'main',
+          release       => $rec_release,
+          architecture  => 'amd64',
+          keyring       => '/etc/apt/keyrings/powerdns.asc',
+          source_format => 'sources',
+          require       => Apt::Source['powerdns'],
+        }
+      } else {
+        apt::source { 'powerdns-recursor':
+          ensure       => present,
+          location     => "http://repo.powerdns.com/${os}",
+          repos        => 'main',
+          release      => $rec_release,
+          architecture => 'amd64',
+          keyring      => '/etc/apt/keyrings/powerdns.asc',
+          require      => Apt::Source['powerdns'],
+        }
+      }
+
+      # Cleanup old .list format files if migrating to DEB822
+      if $supports_deb822 {
+        file { '/etc/apt/sources.list.d/powerdns.list':
+          ensure => absent,
+        }
+
+        file { '/etc/apt/sources.list.d/powerdns-recursor.list':
+          ensure => absent,
+        }
       }
 
       apt::pin { 'powerdns':
